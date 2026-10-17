@@ -2,22 +2,16 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MbareteTráfico 🇵🇾 - Movilidad Urbana Inteligente",
-  description: "Tráfico, colectivos en vivo y desvíos inteligentes para Asunción y el Departamento Central de Paraguay.",
+  title: "Mbarete Transit 🇵🇾 - Movilidad & Billetaje Electrónico",
+  description: "Rastreo de unidades en vivo, paradas cercanas y billetera de transporte Jaha / Más para Asunción y Central.",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
   },
-  openGraph: {
-    title: "MbareteTráfico 🇵🇾 - Movilidad Urbana Inteligente",
-    description: "Consultá en tiempo real el tráfico, desvíos y colectivos en Asunción y Central.",
-    type: "website",
-    locale: "es_PY",
-  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#020617",
+  themeColor: "#F8FAFC",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -30,8 +24,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className="dark bg-slate-950">
-      <body className="min-h-screen bg-slate-950 text-slate-50 antialiased selection:bg-amber-500/30 selection:text-amber-300">
+    <html lang="es" className="light">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="bg-[#F8FAFC] text-[#0B1C30] antialiased flex flex-col min-h-screen selection:bg-[#0B2046] selection:text-white">
         {children}
       </body>
     </html>

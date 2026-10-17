@@ -1,910 +1,925 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { 
-  MOCK_TRAFFIC_ALERTS, 
-  MOCK_BUS_STATUS, 
-  TrafficAlert, 
-  BusStatus,
-  TrafficCategory 
-} from '@/data/mockTrafficData';
-import { 
-  Car, 
-  Bus, 
-  AlertTriangle, 
-  MapPin, 
-  Clock, 
-  Compass, 
-  Mic, 
-  ThumbsUp, 
-  CheckCircle2, 
-  X, 
-  Send, 
-  Wind, 
-  Radio, 
-  ShieldAlert, 
-  Sparkles,
-  Flame,
-  Search,
-  Navigation,
-  Zap,
-  Volume2,
-  MessageSquareText,
-  Bot,
-  ExternalLink,
-  RotateCcw,
-  Share2,
-  Download,
-  Smartphone,
-  ShieldCheck
-} from 'lucide-react';
-
-const COMMON_ZONES = [
-  'Acceso Sur', 
-  'Mcal. López', 
-  'Eusebio Ayala', 
-  'Fernando de la Mora', 
-  'San Lorenzo Centro', 
-  'Ñemby', 
-  'Madame Lynch', 
-  'Asunción Centro'
-];
-
-interface ChatMessage {
-  id: string;
-  sender: 'bot' | 'user';
-  text: string;
-  timestamp: string;
-  quickReplies?: string[];
-}
+import { useState, useEffect } from 'react';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'traffic' | 'buses' | 'assistant'>('traffic');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [trafficAlerts, setTrafficAlerts] = useState<TrafficAlert[]>(MOCK_TRAFFIC_ALERTS);
-  const [busStatuses, setBusStatuses] = useState<BusStatus[]>(MOCK_BUS_STATUS);
+  const [activeTab, setActiveTab] = useState<'rastreo' | 'paradas' | 'billetera'>('rastreo');
 
-  // Toast de confirmación
-  const [toastMessage, setToastMessage] = useState<{ title: string; subtitle: string } | null>(null);
+  // Estado del Rastreo
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [bellTriggered, setBellTriggered] = useState(false);
+  const [recenterAnim, setRecenterAnim] = useState(false);
 
-  // Modal de instalación PWA
-  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  // Estado de Paradas
+  const [selectedRadius, setSelectedRadius] = useState<'200m' | '500m' | '1km'>('200m');
+  const [filterAc, setFilterAc] = useState(false);
+  const [filterFast, setFilterFast] = useState(false);
+  const [filterSeats, setFilterSeats] = useState(false);
 
-  // Modal de reporte ciudadano
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [reportCategory, setReportCategory] = useState<'Tráfico pesado' | 'Accidente' | 'Bache peligroso' | 'Colectivo lleno' | 'Colectivo demorado'>('Tráfico pesado');
-  const [selectedZone, setSelectedZone] = useState('Acceso Sur');
-  const [reportText, setReportText] = useState('');
-  const [isSimulatingAudio, setIsSimulatingAudio] = useState(false);
-  const [audioTranscript, setAudioTranscript] = useState<string | null>(null);
+  // Estado de Billetera Virtual
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [qrCountdown, setQrCountdown] = useState(45);
+  const [isCardFrozen, setIsCardFrozen] = useState(false);
+  const [autoRecharge, setAutoRecharge] = useState(true);
 
-  // Estado del Asistente Vial (Chat WhatsApp Style)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome-1',
-      sender: 'bot',
-      text: '¡Hola! Soy el Bot Vial de MbareteTráfico 🇵🇾. ¿Hacia dónde te dirigís hoy o qué colectivo estás esperando?',
-      timestamp: '14:30',
-      quickReplies: [
-        '¿Cómo está Acceso Sur hoy?',
-        '¿Hay tráfico para ir al centro?',
-        '¿Cómo viene la Línea 26?',
-        'Líneas de San Lorenzo a Asunción'
-      ]
-    }
-  ]);
-  const [chatInput, setChatInput] = useState('');
-  const [isBotTyping, setIsBotTyping] = useState(false);
-  const chatBottomRef = useRef<HTMLDivElement>(null);
+  // Toast Feedback
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Auto-scroll en el chat
-  useEffect(() => {
-    if (activeTab === 'assistant') {
-      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [chatMessages, isBotTyping, activeTab]);
-
-  // Votar alerta
-  const handleVoteAlert = (id: string) => {
-    setTrafficAlerts(prev => prev.map(alert => {
-      if (alert.id === id) {
-        return { ...alert, votesCount: alert.votesCount + 1 };
-      }
-      return alert;
-    }));
-  };
-
-  // Simulación de dictado por voz
-  const handleToggleVoiceDictation = () => {
-    if (isSimulatingAudio) {
-      setIsSimulatingAudio(false);
-      return;
-    }
-
-    setIsSimulatingAudio(true);
-    setAudioTranscript('Grabando audio...');
-
-    setTimeout(() => {
-      let simulatedText = '';
-      if (reportCategory === 'Colectivo lleno' || reportCategory === 'Colectivo demorado') {
-        simulatedText = `Línea 26 coche 45 pasó recién por ${selectedZone} completamente repleto y no paró.`;
-      } else {
-        simulatedText = `Embotellamiento total sobre ${selectedZone}, apenas avanza a paso de hombre por un bache y choque.`;
-      }
-      setReportText(simulatedText);
-      setAudioTranscript('Audio transcripto con éxito 🎙️');
-      setIsSimulatingAudio(false);
-    }, 1800);
-  };
-
-  // Enviar reporte ciudadano
-  const handleSubmitReport = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reportText.trim()) return;
-
-    if (reportCategory === 'Colectivo lleno' || reportCategory === 'Colectivo demorado') {
-      const newBus: BusStatus = {
-        id: `bus-${Date.now()}`,
-        lineName: 'Línea Reportada',
-        companyName: 'Transporte Ciudadano',
-        busNumber: 'Coche Ciudadano',
-        routeBranch: selectedZone,
-        lastSeenLocation: reportText,
-        status: reportCategory === 'Colectivo lleno' ? 'Impedido / Lleno' : 'Demorado',
-        airConditioned: true,
-        minutesAgo: 1,
-        speedKmH: 12
-      };
-      setBusStatuses([newBus, ...busStatuses]);
-    } else {
-      let mappedCategory: TrafficCategory = 'Tráfico Pesado';
-      if (reportCategory === 'Accidente') mappedCategory = 'Accidente';
-      if (reportCategory === 'Bache peligroso') mappedCategory = 'Bache Gigante';
-
-      const newAlert: TrafficAlert = {
-        id: `alert-${Date.now()}`,
-        location: `${selectedZone} - ${reportText}`,
-        zone: selectedZone,
-        category: mappedCategory,
-        severity: 'Alta',
-        delayMinutes: 25,
-        alternativeRoute: `Desvío sugerido por calles internas paralelas a ${selectedZone}`,
-        reportedBy: 'Vos (Comunidad Mbarete)',
-        votesCount: 1,
-        timestamp: 'Justo ahora'
-      };
-      setTrafficAlerts([newAlert, ...trafficAlerts]);
-    }
-
-    setIsReportModalOpen(false);
-    setReportText('');
-    setAudioTranscript(null);
-
-    setToastMessage({
-      title: '¡Reporte enviado con éxito! 🇵🇾✨',
-      subtitle: 'Sumaste +50 puntos en la comunidad de MbareteTráfico.'
-    });
-
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 4000);
+    }, 3500);
   };
 
-  // Lógica del Chatbot Inteligente
-  const handleSendMessage = (messageText?: string) => {
-    const textToSend = messageText || chatInput;
-    if (!textToSend.trim()) return;
+  // Timer QR
+  useEffect(() => {
+    if (!isQrModalOpen) return;
+    const interval = setInterval(() => {
+      setQrCountdown((prev) => (prev <= 1 ? 45 : prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isQrModalOpen]);
 
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      sender: 'user',
-      text: textToSend,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
+  // Lista de colectivos en Paradas
+  const busArrivals = [
+    {
+      id: '15-2',
+      line: '15-2',
+      company: 'Automotores',
+      type: 'Diferencial con A/C',
+      route: 'Ypané → Asunción (Por Mercado 4)',
+      status: 'Baja ocupación (~14 libres)',
+      coche: '#408',
+      eta: 3,
+      ac: true,
+      hasSeats: true
+    },
+    {
+      id: '38',
+      line: '38',
+      company: 'Mcal. López',
+      type: 'Común',
+      route: 'Ytororó → Clínicas',
+      status: 'Ocupación Media',
+      coche: '#112',
+      eta: 8,
+      price: 'G. 2.300',
+      ac: false,
+      hasSeats: true
+    },
+    {
+      id: '21',
+      line: '21',
+      company: 'San Fernando',
+      type: 'Diferencial',
+      route: 'Zona Sur Fdo. → Puerto Sajonia',
+      status: 'Alta ocupación (De pie)',
+      coche: '#054',
+      eta: 14,
+      ac: true,
+      hasSeats: false
+    },
+    {
+      id: '8',
+      line: '8',
+      company: 'De la Conquista',
+      type: 'San Antonio - Asunción',
+      route: 'Acceso Sur → Terminal de Asunción',
+      status: 'Asientos libres',
+      coche: '#210',
+      eta: 22,
+      ac: false,
+      hasSeats: true
+    }
+  ];
 
-    setChatMessages(prev => [...prev, userMsg]);
-    setChatInput('');
-    setIsBotTyping(true);
-
-    const lower = textToSend.toLowerCase();
-
-    setTimeout(() => {
-      let botResponse = '';
-      let quickReplies: string[] | undefined = undefined;
-
-      if (lower.includes('acceso sur') || lower.includes('4 mojones') || lower.includes('cuatro mojones')) {
-        const alertSur = trafficAlerts.find(a => a.location.toLowerCase().includes('acceso sur'));
-        botResponse = alertSur 
-          ? `⚠️ Atención sobre Acceso Sur: Tenemos reporte de ${alertSur.category} a la altura de 4 Mojones (+${alertSur.delayMinutes} min de demora). 💡 Ruta recomendada: ${alertSur.alternativeRoute}.`
-          : '✅ Acceso Sur reporta tránsito relativamente fluido en los últimos 20 minutos.';
-      } else if (lower.includes('centro') || lower.includes('asunción') || lower.includes('eusebio ayala') || lower.includes('mcal')) {
-        botResponse = '🚗 Para entrar al Centro de Asunción: Hay manifestación activa sobre Eusebio Ayala y tráfico pesado en Mcal. López y Villamorra. Te conviene ingresar por Avda. Fernando de la Mora o Costanera Norte.';
-      } else if (lower.includes('26') || lower.includes('línea 26')) {
-        const bus26 = busStatuses.find(b => b.lineName.includes('26'));
-        botResponse = bus26 
-          ? `🚌 La Línea 26 (${bus26.busNumber}) fue vista hace ${bus26.minutesAgo} min en ${bus26.lastSeenLocation}. Estado actual: "${bus26.status}" y viene a ${bus26.speedKmH} km/h.`
-          : '🚌 La Línea 26 tiene frecuencia regular de 8 a 12 minutos.';
-      } else if (lower.includes('san lorenzo')) {
-        botResponse = '🚌 De San Lorenzo a Asunción podés tomar: Línea 26 (por Eusebio Ayala, asientos libres ahora), Línea 56 (por Mcal. López) o Línea 21. Si vas en auto, el nudo de Curva Romero tiene +20 min de demora.';
-      } else {
-        botResponse = '🤖 Entendido. Estoy monitoreando las cámaras comunitarias y reportes de choferes. Podés preguntarme por cualquier avenida (Acceso Sur, Mcal. López, Eusebio Ayala) o consultar el estado de una línea de colectivo.';
-        quickReplies = [
-          '¿Cómo está Acceso Sur hoy?',
-          '¿Hay tráfico para ir al centro?',
-          '¿Cómo viene la Línea 26?'
-        ];
-      }
-
-      const botMsg: ChatMessage = {
-        id: `bot-${Date.now()}`,
-        sender: 'bot',
-        text: botResponse,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        quickReplies
-      };
-
-      setChatMessages(prev => [...prev, botMsg]);
-      setIsBotTyping(false);
-    }, 900);
-  };
-
-  // Filtrado de alertas de tráfico
-  const filteredAlerts = useMemo(() => {
-    if (!searchQuery.trim()) return trafficAlerts;
-    const q = searchQuery.toLowerCase().trim();
-    return trafficAlerts.filter(a => 
-      a.location.toLowerCase().includes(q) ||
-      a.zone.toLowerCase().includes(q) ||
-      a.category.toLowerCase().includes(q)
-    );
-  }, [trafficAlerts, searchQuery]);
-
-  // Filtrado de colectivos
-  const filteredBuses = useMemo(() => {
-    if (!searchQuery.trim()) return busStatuses;
-    const q = searchQuery.toLowerCase().trim();
-    return busStatuses.filter(b => 
-      b.lineName.toLowerCase().includes(q) ||
-      b.routeBranch.toLowerCase().includes(q) ||
-      b.lastSeenLocation.toLowerCase().includes(q)
-    );
-  }, [busStatuses, searchQuery]);
-
-  const activeSearchResult = searchQuery.trim() !== '' && filteredAlerts.length > 0;
-
-  // Enlace para compartir en WhatsApp
-  const shareWhatsAppUrl = useMemo(() => {
-    const text = encodeURIComponent(
-      `🚨 *MbareteTráfico 🇵🇾 - Reporte en Vivo*\n` +
-      `Hay demoras activas en ${trafficAlerts[0]?.location || 'Asunción y Central'}.\n` +
-      `Mirá los desvíos y colectivos en tiempo real aquí: https://mbaretetrafico.py`
-    );
-    return `https://api.whatsapp.com/send?text=${text}`;
-  }, [trafficAlerts]);
+  const filteredArrivals = busArrivals.filter((bus) => {
+    if (filterAc && !bus.ac) return false;
+    if (filterFast && bus.eta >= 10) return false;
+    if (filterSeats && !bus.hasSeats) return false;
+    return true;
+  });
 
   return (
-    <main className="max-w-md mx-auto min-h-screen bg-slate-950 text-slate-50 flex flex-col shadow-2xl relative border-x border-slate-900/60 pb-28">
-      
-      {/* NOTIFICACIÓN TOAST */}
+    <div className="bg-[#F8FAFC] text-[#0B1C30] min-h-screen flex flex-col font-sans selection:bg-[#0B2046] selection:text-white pb-24">
+      {/* TOAST FLOTANTE */}
       {toastMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-sm bg-slate-900/95 border border-emerald-500/60 text-white p-3.5 rounded-2xl shadow-2xl flex items-start gap-3 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="p-1 rounded-full bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-xs font-bold text-emerald-300">{toastMessage.title}</h4>
-            <p className="text-[11px] text-slate-300 mt-0.5">{toastMessage.subtitle}</p>
-          </div>
-          <button 
-            onClick={() => setToastMessage(null)}
-            className="text-slate-400 hover:text-white"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#0B2046] text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in slide-in-from-top-3">
+          <span className="material-symbols-outlined text-[18px] text-emerald-400">check_circle</span>
+          <span className="text-xs font-bold">{toastMessage}</span>
         </div>
       )}
 
       {/* HEADER PRINCIPAL */}
-      <header className="sticky top-0 z-30 bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-extrabold text-lg shadow-sm">
+      <header className="fixed top-0 w-full z-40 bg-white/95 backdrop-blur-xl border-b border-slate-200/80 shadow-[0_2px_12px_rgba(11,32,70,0.04)]">
+        <div className="h-16 max-w-md mx-auto px-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-[#0B2046] text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
               🇵🇾
             </div>
-            <div>
+            <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-black text-base tracking-tight text-white">Mbarete<span className="text-amber-400">Tráfico</span></span>
-                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">PROD</span>
+                <span className="text-[17px] font-extrabold tracking-tight text-[#0B2046]">Mbarete</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0B2046]/10 text-[#0B2046] uppercase tracking-wider">
+                  Transit
+                </span>
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 beacon-pulse inline-block" />
-                <span className="text-[11px] text-emerald-400 font-medium">En vivo • Asunción y Central</span>
-              </div>
+              <span className="text-[12px] font-medium text-slate-500 truncate">Asunción & Central</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* BOTÓN INSTALAR PWA */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsInstallModalOpen(true)}
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-amber-400 hover:border-amber-500/50 transition"
-              title="Instalar App en el Celular"
+              onClick={() => showToast('Actualizando datos de GPS')}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-[#0B2046] transition-colors shadow-sm"
+              title="Ajustes y GPS"
             >
-              <Smartphone className="w-4 h-4" />
+              <span className="material-symbols-outlined text-[18px]">tune</span>
             </button>
-
-            {/* BOTÓN COMPARTIR VIRAL */}
-            <a
-              href={shareWhatsAppUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition flex items-center"
-              title="Compartir reporte en WhatsApp"
-            >
-              <Share2 className="w-4 h-4" />
-            </a>
+            <div className="relative flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-[#0B2046] text-amber-300 font-bold text-xs flex items-center justify-center ring-2 ring-[#0B2046]/20 shadow-sm">
+                JV
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
+            </div>
           </div>
-        </div>
-
-        {/* 3 PESTAÑAS TÁCTILES SUPERIORES */}
-        <div className="grid grid-cols-3 gap-1.5 mt-3 p-1 bg-slate-900/90 rounded-2xl border border-slate-800">
-          <button
-            onClick={() => setActiveTab('traffic')}
-            className={`py-2 px-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
-              activeTab === 'traffic'
-                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Car className="w-3.5 h-3.5" />
-            <span>🚗 Tráfico</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('buses')}
-            className={`py-2 px-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
-              activeTab === 'buses'
-                ? 'bg-blue-500 text-white shadow-md shadow-blue-500/20'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Bus className="w-3.5 h-3.5" />
-            <span>🚌 Micros</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('assistant')}
-            className={`py-2 px-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
-              activeTab === 'assistant'
-                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <MessageSquareText className="w-3.5 h-3.5" />
-            <span>💬 Asistente</span>
-          </button>
         </div>
       </header>
 
       {/* CONTENIDO PRINCIPAL */}
-      <div className="p-4 space-y-4 flex-1">
+      <main className="flex-1 w-full max-w-md mx-auto pt-16">
+        {/* =========================================
+            VISTA 1: RASTREO EN VIVO (MAPA Y UNIDAD)
+           ========================================= */}
+        {activeTab === 'rastreo' && (
+          <div className="flex flex-col w-full relative select-none animate-in fade-in">
+            {/* Mapa Interactivo con Canvas SVG */}
+            <div className="relative w-full h-[370px] overflow-hidden bg-slate-100">
+              <div
+                className="absolute inset-0 w-full h-full bg-cover bg-center opacity-70 scale-105"
+                style={{
+                  backgroundImage:
+                    "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAzgeX5VM99OSYeYnAahu9m57Y_S4O1tYyuQWfsL24r7NBPSzBbpx6Hg_BGjzzqt-EwjGcxOl24pvgW9J1uZv8_OPUKM3Ue8IS_bqFiFoLrvLRy3ht6CT7_SvZK5sAsXKyo9SPQYzxBCswMrpKi1igUC_QHfouuRuB_tytry2UGwpq6UwBicEcJTxnM1kZF7LJNnMT3-Cdd27gc0jGmWTqz_0HFVivNK2FVVDbPkFIFaLkcUO9RhfRX')",
+                  filter: 'saturate(0.8) brightness(1.08)'
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-transparent to-[#F8FAFC] opacity-95 pointer-events-none" />
 
-        {/* TAB 1: TRÁFICO */}
-        {activeTab === 'traffic' && (
-          <div className="space-y-4">
-            <section className="space-y-2">
-              <div className="relative">
-                <Navigation className="w-4 h-4 text-amber-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder='¿Por dónde te vas? (ej. "San Lorenzo", "Centro")...'
-                  className="w-full bg-slate-900/90 border border-slate-800/90 rounded-2xl py-2.5 pl-10 pr-10 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+              {/* Trazado Vectorial de Ruta */}
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" fill="none" viewBox="0 0 390 370">
+                <defs>
+                  <filter height="140%" id="route-glow" width="140%" x="-20%" y="-20%">
+                    <feGaussianBlur result="blur" stdDeviation="2.5"></feGaussianBlur>
+                    <feComposite in="SourceGraphic" in2="blur" operator="over"></feComposite>
+                  </filter>
+                  <linearGradient gradientUnits="userSpaceOnUse" id="route-gradient" x1="50" x2="340" y1="360" y2="40">
+                    <stop offset="0%" stopColor="#059669" stopOpacity="0.9"></stop>
+                    <stop offset="50%" stopColor="#0B2046" stopOpacity="1"></stop>
+                    <stop offset="100%" stopColor="#F59E0B" stopOpacity="0.95"></stop>
+                  </linearGradient>
+                </defs>
+                <path d="M 60 360 C 90 300, 110 260, 160 215" stroke="#CBD5E1" strokeLinecap="round" strokeWidth="8"></path>
+                <path d="M 60 360 C 90 300, 110 260, 160 215" opacity="0.8" stroke="#10B981" strokeDasharray="3 6" strokeLinecap="round" strokeWidth="4"></path>
+                <path d="M 160 215 C 205 175, 230 160, 275 110 C 310 70, 325 50, 350 20" opacity="0.35" stroke="#93C5FD" strokeLinecap="round" strokeWidth="8"></path>
+                <path d="M 160 215 C 205 175, 230 160, 275 110 C 310 70, 325 50, 350 20" filter="url(#route-glow)" stroke="url(#route-gradient)" strokeLinecap="round" strokeWidth="4.5"></path>
+                <circle className="animate-ping" cx="275" cy="110" fill="#F59E0B" fillOpacity="0.3" r="14" style={{ animationDuration: '2.2s' }}></circle>
+                <circle cx="275" cy="110" fill="#FFFFFF" r="9" stroke="#D97706" strokeWidth="2"></circle>
+                <circle cx="275" cy="110" fill="#F59E0B" r="5"></circle>
+              </svg>
+
+              {/* Colectivo en Movimiento */}
+              <div
+                className={`absolute left-[142px] top-[197px] -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none transition-all duration-500 ease-out ${
+                  recenterAnim ? 'scale-125' : 'scale-100'
+                }`}
+              >
+                <span className="absolute w-14 h-14 rounded-full bg-blue-500/20 animate-ping" style={{ animationDuration: '1.8s' }}></span>
+                <span className="absolute w-10 h-10 rounded-full bg-blue-600/25 animate-pulse"></span>
+                <div className="relative w-9 h-9 rounded-full bg-[#0B2046] flex items-center justify-center shadow-lg shadow-blue-900/30 ring-2 ring-white">
+                  <span className="material-symbols-outlined text-white text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    directions_bus
+                  </span>
+                </div>
+                <div className="absolute -top-7 whitespace-nowrap bg-white/95 backdrop-blur-md px-2.5 py-0.5 rounded-full shadow-md border border-slate-200">
+                  <span className="text-[11px] text-[#0B2046] font-bold tracking-wider">LÍNEA 15-2</span>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                <span className="text-[10px] uppercase font-bold text-slate-500 shrink-0">Ejes:</span>
-                {COMMON_ZONES.slice(0, 5).map(zone => (
-                  <button
-                    key={zone}
-                    onClick={() => setSearchQuery(searchQuery === zone ? '' : zone)}
-                    className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap transition ${
-                      searchQuery === zone
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {zone}
-                  </button>
-                ))}
+              {/* Pin Flotante Tu Parada */}
+              <div className="absolute left-[195px] top-[48px] pointer-events-none flex flex-col items-start bg-white/95 backdrop-blur-md p-2 rounded-xl shadow-lg border border-amber-200 max-w-[175px]">
+                <div className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-amber-500 text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    person_pin_circle
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Tu Parada</span>
+                </div>
+                <p className="text-xs text-[#0B2046] font-bold leading-tight mt-0.5">4 Mojones (850m)</p>
+              </div>
+
+              {/* Pastilla ETA en Vivo */}
+              <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between bg-white/95 backdrop-blur-xl p-2.5 rounded-2xl shadow-[0_8px_24px_rgba(11,32,70,0.1)] border border-slate-200/90">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-sm">
+                    <span className="material-symbols-outlined text-[24px]">timer</span>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl text-[#0B2046] font-extrabold tracking-tight">4</span>
+                      <span className="text-sm text-[#0B2046] font-bold">min</span>
+                      <span className="text-xs text-slate-500 font-medium ml-1">· 850m</span>
+                    </div>
+                    <p className="text-xs text-emerald-600 flex items-center gap-1.5 font-semibold">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Transmisión GPS en vivo (hace 2s)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setRecenterAnim(true);
+                    setTimeout(() => setRecenterAnim(false), 500);
+                    showToast('Enfocando Coche 42 en 4 Mojones');
+                  }}
+                  className="w-10 h-10 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[#0B2046] flex items-center justify-center transition-transform active:scale-90 shadow-sm"
+                  title="Centrar unidad"
+                >
+                  <span className="material-symbols-outlined text-[20px]">my_location</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Contenido de Detalle de la Unidad */}
+            <div className="px-4 space-y-3.5 py-3 -mt-2 relative z-10">
+              {/* Card 1: Telemetría de Unidad */}
+              <section className="bg-white rounded-2xl p-4 shadow-[0_4px_20px_rgba(11,32,70,0.06)] border border-slate-200/80 space-y-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-[#0B2046] text-[11px] font-bold uppercase tracking-wide">
+                        Coche 42
+                      </span>
+                      <span className="text-xs text-slate-500 font-medium">Placa ABJ 890</span>
+                    </div>
+                    <h2 className="text-lg text-[#0B2046] font-bold tracking-tight">Diferencial Climatizado</h2>
+                    <p className="text-xs text-slate-500">Línea 15-2 • Ramal Acceso Sur / Terminal</p>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-100 text-sky-600 flex items-center justify-center shadow-sm">
+                      <span className="material-symbols-outlined text-[22px]">mode_fan</span>
+                    </div>
+                    <span className="text-xs text-sky-700 font-bold mt-1">21°C AC</span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[#0B2046] font-semibold flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[17px] text-emerald-600">airline_seat_recline_normal</span>
+                      Ocupación 65%
+                    </span>
+                    <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70">
+                      14 Asientos Libres
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden flex">
+                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: '65%' }}></div>
+                  </div>
+                  <p className="text-[11px] text-slate-500">Flujo de subida moderado en el tramo actual</p>
+                </div>
+              </section>
+
+              {/* Card 2: Secuencia de Paradas */}
+              <section className="bg-white rounded-2xl p-4 shadow-[0_4px_20px_rgba(11,32,70,0.06)] border border-slate-200/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base text-[#0B2046] font-bold">Secuencia de Ruta</h3>
+                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                    En trayecto
+                  </span>
+                </div>
+
+                <div className="relative space-y-4 pl-1">
+                  <div className="absolute left-[15px] top-3 bottom-3 w-[2px] bg-blue-100"></div>
+
+                  {/* Parada anterior */}
+                  <div className="relative flex items-start gap-3 opacity-60">
+                    <div className="relative z-10 w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500">
+                      <span className="material-symbols-outlined text-[16px]">check</span>
+                    </div>
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <span className="text-[11px] text-slate-500 uppercase font-bold tracking-wider">Parada anterior · 18:24</span>
+                      <p className="text-sm text-[#0B2046] font-semibold line-clamp-1">Avda. Fdo. de la Mora y De la Victoria</p>
+                      <span className="text-xs text-slate-400">Superada con fluidez</span>
+                    </div>
+                  </div>
+
+                  {/* Tu parada */}
+                  <div className="relative flex items-start gap-3 bg-gradient-to-r from-amber-50/90 to-amber-50/40 border border-amber-200/90 p-3 rounded-xl shadow-sm">
+                    <div className="relative z-10 w-9 h-9 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/30">
+                      <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        directions_walk
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider animate-pulse">
+                          Tu parada
+                        </span>
+                        <span className="text-xs text-amber-800 font-bold">Llega ~18:31</span>
+                      </div>
+                      <p className="text-sm text-[#0B2046] font-bold truncate mt-1">Acceso Sur y 4 Mojones</p>
+                      <div className="mt-1 flex items-center gap-1.5 text-amber-700">
+                        <span className="material-symbols-outlined text-[16px]">notifications_active</span>
+                        <span className="text-xs font-bold">Prepárate para abordar</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Próximo destino */}
+                  <div className="relative flex items-start gap-3 opacity-85">
+                    <div className="relative z-10 w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0B2046]">
+                      <span className="material-symbols-outlined text-[16px]">arrow_downward</span>
+                    </div>
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <span className="text-[11px] text-slate-500 uppercase font-bold tracking-wider">Próximo destino</span>
+                      <p className="text-sm text-[#0B2046] font-semibold line-clamp-1">Mercado 4 / Pettirossi</p>
+                      <span className="text-xs text-slate-500">ETA aprox. 18:45</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Card 3: Acciones Rápidas */}
+              <section className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 bg-white rounded-2xl p-3 flex items-center justify-between border border-slate-200/80 shadow-[0_4px_16px_rgba(11,32,70,0.04)]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center shadow-sm">
+                      <span className="material-symbols-outlined text-[22px]">traffic</span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-slate-500 uppercase font-bold block">Estado del Tránsito</span>
+                      <p className="text-sm text-[#0B2046] font-bold">Moderado con paso fluido</p>
+                    </div>
+                  </div>
+                  <span className="text-base text-emerald-600 font-extrabold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+                    34 km/h
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => showToast('Enlace de rastreo copiado al portapapeles 📤')}
+                  className="bg-white hover:bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 flex flex-col items-center justify-center gap-1 text-center transition-all active:scale-95 shadow-[0_4px_16px_rgba(11,32,70,0.04)]"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0B2046] flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[22px]">share_location</span>
+                  </div>
+                  <span className="text-xs text-[#0B2046] font-bold mt-0.5">Compartir Viaje</span>
+                  <span className="text-[11px] text-slate-500">Enlace en vivo</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setBellTriggered(!bellTriggered);
+                    showToast(bellTriggered ? 'Aviso de parada cancelado' : 'Timbre virtual transmitido al chofer 🔔');
+                  }}
+                  className={`border rounded-2xl p-3.5 flex flex-col items-center justify-center gap-1 text-center transition-all active:scale-95 shadow-[0_4px_16px_rgba(11,32,70,0.04)] ${
+                    bellTriggered ? 'bg-rose-50 border-rose-300 text-rose-600' : 'bg-white border-slate-200/90 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bellTriggered ? 'bg-rose-100 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>
+                    <span className="material-symbols-outlined text-[22px]">
+                      {bellTriggered ? 'notifications_active' : 'notifications_none'}
+                    </span>
+                  </div>
+                  <span className="text-xs text-[#0B2046] font-bold mt-0.5">
+                    {bellTriggered ? 'Timbre Activado' : 'Timbre Virtual'}
+                  </span>
+                  <span className="text-[11px] text-slate-500">Avisar bajada</span>
+                </button>
+              </section>
+
+              {/* Botón Seguir con Alerta */}
+              <div className="pt-1 pb-4">
+                <button
+                  onClick={() => {
+                    setIsFollowing(!isFollowing);
+                    showToast(isFollowing ? 'Alerta desactivada' : 'Alerta activada: Sonido y vibración listos');
+                  }}
+                  className={`w-full py-3.5 px-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all active:scale-98 border ${
+                    isFollowing
+                      ? 'bg-[#0B2046] text-white border-[#0B2046] shadow-blue-900/30'
+                      : 'bg-[#F59E0B] hover:bg-[#D97706] text-[#0B192C] border-amber-300 shadow-[0_8px_20px_rgba(245,158,11,0.35)]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    {isFollowing ? 'notifications_active' : 'vibration'}
+                  </span>
+                  <span>{isFollowing ? 'Alerta activa: Te avisaremos a 300m' : 'Seguir con alerta sonora / vibración'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================
+            VISTA 2: PARADAS CERCANAS
+           ========================================= */}
+        {activeTab === 'paradas' && (
+          <div className="flex flex-col w-full px-4 pt-4 pb-8 space-y-4 animate-in fade-in">
+            {/* Header HUD de Proximidad */}
+            <section className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[#0284c7]">
+                  <span className="material-symbols-outlined text-[18px] animate-pulse">my_location</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#0284c7]">GPS Activo en Tiempo Real</span>
+                </div>
+                <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 shadow-sm flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  Alta precisión
+                </span>
+              </div>
+
+              <div className="flex items-baseline justify-between mt-1">
+                <div>
+                  <p className="text-xl font-extrabold text-[#0B2046] tracking-tight">Paradas Cercanas</p>
+                  <p className="text-xs text-slate-500">A 150m de tu ubicación actual</p>
+                </div>
+                {/* Control de Radio */}
+                <div className="flex p-1 rounded-xl bg-slate-200/70 border border-slate-300/60 shadow-inner">
+                  {(['200m', '500m', '1km'] as const).map((rad) => (
+                    <button
+                      key={rad}
+                      onClick={() => {
+                        setSelectedRadius(rad);
+                        showToast(`Radio ajustado a ${rad}`);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                        selectedRadius === rad ? 'bg-[#0B2046] text-white shadow-sm' : 'bg-white/50 text-slate-600 hover:text-[#0B2046]'
+                      }`}
+                    >
+                      {rad}
+                    </button>
+                  ))}
+                </div>
               </div>
             </section>
 
-            {/* BOTÓN VIRAL WHATSAPP DESTACADO */}
-            <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-2xl border border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="text-xs text-slate-300 font-medium">¿Vas a salir ahora?</span>
-              </div>
-              <a
-                href={shareWhatsAppUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 transition"
-              >
-                <span>Compartir reporte en WhatsApp 📤</span>
-              </a>
-            </div>
+            {/* Mini Mapa de Contexto */}
+            <section className="relative w-full h-44 rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-slate-100">
+              <div
+                className="w-full h-full bg-cover bg-center brightness-[1.02]"
+                style={{
+                  backgroundImage:
+                    "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAzgeX5VM99OSYeYnAahu9m57Y_S4O1tYyuQWfsL24r7NBPSzBbpx6Hg_BGjzzqt-EwjGcxOl24pvgW9J1uZv8_OPUKM3Ue8IS_bqFiFoLrvLRy3ht6CT7_SvZK5sAsXKyo9SPQYzxBCswMrpKi1igUC_QHfouuRuB_tytry2UGwpq6UwBicEcJTxnM1kZF7LJNnMT3-Cdd27gc0jGmWTqz_0HFVivNK2FVVDbPkFIFaLkcUO9RhfRX')"
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-white/70 via-transparent to-white/30 pointer-events-none" />
 
-            {activeSearchResult && (
-              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-900 to-emerald-950/40 border border-emerald-500/60 shadow-lg shadow-emerald-500/10 space-y-1.5 animate-in fade-in">
+              {/* Pin de Ubicación Actual */}
+              <div className="absolute top-[52%] left-[46%] -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                <span className="absolute w-8 h-8 rounded-full bg-sky-400/40 animate-ping"></span>
+                <div className="w-4 h-4 rounded-full bg-[#0284c7] ring-2 ring-white shadow"></div>
+              </div>
+
+              {/* Badges de Paradas */}
+              <div className="absolute top-[32%] left-[58%] -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0B2046] text-white text-[11px] font-bold shadow-lg ring-2 ring-white">
+                <span className="w-4 h-4 rounded-full bg-amber-400 text-[#0B2046] font-bold text-[10px] flex items-center justify-center">1</span>
+                <span>4 Mojones</span>
+              </div>
+            </section>
+
+            {/* Aviso de Obras / Desvío */}
+            <section className="p-3.5 rounded-xl bg-[#FEF3C7] border border-[#F59E0B]/50 shadow-sm flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#F59E0B]/20 text-[#B45309] flex items-center justify-center shrink-0 mt-0.5">
+                <span className="material-symbols-outlined text-[20px]">warning</span>
+              </div>
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Compass className="w-4 h-4" />
-                    Desvío Mbarete para tu trayecto:
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Ahorrá hasta 25 min
-                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#B45309]">Aviso de Tránsito</span>
+                  <span className="text-[11px] text-[#92400E]/80 font-medium">Hace 12 min</span>
                 </div>
-                <p className="text-xs text-slate-200 leading-relaxed">
-                  Detectamos demoras en tu búsqueda ({searchQuery}). <strong>Ruta más rápida sugerida:</strong> {filteredAlerts[0].alternativeRoute}.
+                <p className="text-xs font-bold text-[#0B2046] mt-0.5 truncate">Obras viales en Avda. Eusebio Ayala</p>
+                <p className="text-xs text-[#78350F] mt-0.5 leading-snug">
+                  Desvío por calle De La Victoria. Demoras de 5 a 10 min.
                 </p>
               </div>
-            )}
+            </section>
 
-            <section className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Flame className="w-3.5 h-3.5 text-amber-400" />
-                  Alertas Viales en Vivo ({filteredAlerts.length})
-                </h2>
-                <span className="text-[10px] text-slate-500">Ordenado por urgencia</span>
-              </div>
+            {/* Chips de Filtrado */}
+            <section className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              <button
+                onClick={() => setFilterAc(!filterAc)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                  filterAc ? 'bg-[#0B2046] text-white border-[#0B2046] shadow-sm' : 'bg-white text-slate-700 border-slate-200'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">mode_fan</span>
+                <span>Solo con Aire</span>
+              </button>
 
-              {filteredAlerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className={`rounded-2xl border p-3.5 transition space-y-2.5 overflow-hidden ${
-                    alert.severity === 'Alta' 
-                      ? 'bg-gradient-to-br from-slate-900 via-slate-900/90 to-rose-950/20 border-rose-500/40' 
-                      : 'bg-slate-900/70 border-slate-800/80 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                          alert.category === 'Accidente' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
-                          alert.category === 'Manifestación' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                          alert.category === 'Bache Gigante' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                          'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-                        }`}>
-                          {alert.category}
-                        </span>
-                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-500" />
-                          {alert.timestamp}
-                        </span>
-                      </div>
+              <button
+                onClick={() => setFilterFast(!filterFast)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                  filterFast ? 'bg-[#0B2046] text-white border-[#0B2046] shadow-sm' : 'bg-white text-slate-700 border-slate-200'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">timer</span>
+                <span>Menos de 10 min</span>
+              </button>
 
-                      <h3 className="font-bold text-sm text-white tracking-tight leading-snug">
-                        {alert.location}
-                      </h3>
-                      <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-slate-500" />
-                        {alert.zone}
-                      </p>
-                    </div>
+              <button
+                onClick={() => setFilterSeats(!filterSeats)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                  filterSeats ? 'bg-[#0B2046] text-white border-[#0B2046] shadow-sm' : 'bg-white text-slate-700 border-slate-200'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">airline_seat_recline_normal</span>
+                <span>Asientos libres</span>
+              </button>
+            </section>
 
-                    <div className="text-right shrink-0">
-                      <span className="text-[10px] text-slate-400 block font-semibold">Demora est.</span>
-                      <span className="text-sm font-black text-rose-400">
-                        +{alert.delayMinutes} min
-                      </span>
-                    </div>
+            {/* Listado de Colectivos Próximos */}
+            <section className="space-y-2.5">
+              <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-[#0B2046] text-white flex items-center justify-center shrink-0 font-bold text-sm shadow-sm">
+                    #1
                   </div>
-
-                  <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-xs shadow-inner">
-                    <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1 mb-0.5">
-                      <Compass className="w-3.5 h-3.5" />
-                      Ruta Alternativa Mbarete:
-                    </span>
-                    <p className="text-slate-100 text-[11px] leading-relaxed font-medium">
-                      {alert.alternativeRoute}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
-                    <span className="text-[10px] text-slate-500">Reportó: {alert.reportedBy}</span>
-                    <button
-                      onClick={() => handleVoteAlert(alert.id)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition text-[11px] active:scale-95"
-                    >
-                      <ThumbsUp className="w-3 h-3 text-amber-400" />
-                      <span>Sigue ahí ({alert.votesCount})</span>
-                    </button>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-[#0B2046] block">Parada Seleccionada</span>
+                    <h2 className="text-sm font-bold text-[#0B2046] truncate">Parada 4 Mojones (Acceso Sur)</h2>
                   </div>
                 </div>
+                <span className="text-xs font-semibold text-slate-500">150m</span>
+              </div>
+
+              {filteredArrivals.map((bus) => (
+                <article
+                  key={bus.id}
+                  className="p-3.5 rounded-xl bg-white border border-slate-200/90 shadow-sm transition-all hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center">
+                        <span className="px-2.5 py-1 rounded-lg bg-[#0B2046] text-white font-bold text-sm shadow-sm">
+                          {bus.line}
+                        </span>
+                        <span className="text-[10px] font-bold text-sky-700 mt-1">{bus.company}</span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-[#0B2046]">{bus.type}</span>
+                          {bus.ac && (
+                            <span className="p-0.5 rounded bg-sky-100 text-sky-700">
+                              <span className="material-symbols-outlined text-[14px]">ac_unit</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500">{bus.route}</p>
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            {bus.status}
+                          </span>
+                          <span className="text-xs text-slate-400 font-medium">Coche {bus.coche}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end shrink-0">
+                      <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500 text-white shadow-sm animate-pulse">
+                        <span className="material-symbols-outlined text-[14px]">electric_bolt</span>
+                        <span className="text-xs font-extrabold">{bus.eta} min</span>
+                      </div>
+                      <span className="text-[10px] font-medium text-slate-400 mt-1">Llegando</span>
+                    </div>
+                  </div>
+                </article>
               ))}
             </section>
           </div>
         )}
 
-        {/* TAB 2: COLECTIVOS */}
-        {activeTab === 'buses' && (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5 text-blue-400" />
-                Colectivos en Ruta ({filteredBuses.length})
-              </h2>
-              <span className="text-[10px] text-slate-500">Actualizado hace instantes</span>
-            </div>
-
-            {filteredBuses.map((bus) => (
+        {/* =========================================
+            VISTA 3: MI BILLETERA (BILLETE ELECTRÓNICO)
+           ========================================= */}
+        {activeTab === 'billetera' && (
+          <div className="flex flex-col w-full px-4 pt-4 pb-8 space-y-4 animate-in fade-in">
+            {/* Tarjeta Virtual Azul Zafiro Imperial */}
+            <section className="relative w-full">
               <div
-                key={bus.id}
-                className="rounded-2xl border border-slate-800/80 bg-slate-900/70 p-3.5 space-y-2.5 hover:border-slate-700 transition"
+                className={`relative w-full aspect-[1.586/1] rounded-2xl p-5 flex flex-col justify-between overflow-hidden shadow-[0_20px_40px_-15px_rgba(11,32,70,0.35)] bg-gradient-to-br from-[#1E3A8A] via-[#0E2554] to-[#0B2046] border border-white/20 transition-all ${
+                  isCardFrozen ? 'grayscale opacity-75' : ''
+                }`}
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-white px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                        {bus.lineName}
-                      </span>
-                      <span className="text-xs font-semibold text-slate-300">
-                        {bus.busNumber}
-                      </span>
-                      {bus.airConditioned && (
-                        <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 flex items-center gap-0.5">
-                          <Wind className="w-2.5 h-2.5" />
-                          Aire
-                        </span>
-                      )}
+                <div className="absolute inset-0 bg-gradient-to-tr from-white/10 via-transparent to-amber-300/15 pointer-events-none mix-blend-overlay"></div>
+                <div className="absolute -top-24 -right-24 w-60 h-60 bg-blue-400/20 blur-3xl pointer-events-none rounded-full"></div>
+
+                {/* Cabecera Tarjeta */}
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-8 h-8 rounded-lg bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/25">
+                      <span className="material-symbols-outlined text-amber-400 text-[20px]">electric_bolt</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      {bus.companyName} • {bus.routeBranch}
-                    </p>
+                    <div className="flex flex-col ml-1">
+                      <span className="text-[16px] font-extrabold tracking-tight text-white leading-tight">MbareteCard</span>
+                      <span className="text-[9px] font-semibold tracking-wider uppercase text-blue-200">Billetaje Electrónico</span>
+                    </div>
                   </div>
-
-                  <div className="text-right">
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full block text-center ${
-                      bus.status === 'Asientos libres' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-extrabold' :
-                      bus.status === 'Demorado' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                      'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                    }`}>
-                      {bus.status}
-                    </span>
-                    <span className="text-[10px] text-slate-500 mt-1 block">
-                      hace {bus.minutesAgo} min
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-white/90 text-[20px] rotate-90">contactless</span>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/15 backdrop-blur-md text-white font-bold border border-white/25">
+                      JAHA / MÁS
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/60 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                    <span className="truncate text-[11px]">Última parada: {bus.lastSeenLocation}</span>
+                {/* Chip Dorado */}
+                <div className="relative z-10 flex items-center justify-between my-auto">
+                  <div className="w-11 h-8 rounded-lg bg-gradient-to-tr from-amber-600 via-amber-300 to-amber-100 shadow-md p-1 flex flex-col justify-between border border-amber-300/60">
+                    <div className="w-full h-0.5 bg-amber-900/30"></div>
+                    <div className="flex justify-between w-full h-1.5">
+                      <div className="w-2 rounded-sm bg-amber-900/25"></div>
+                      <div className="w-2 rounded-sm bg-amber-900/25"></div>
+                    </div>
+                    <div className="w-full h-0.5 bg-amber-900/30"></div>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono shrink-0 pl-2">
-                    {bus.speedKmH} km/h
-                  </span>
-                </div>
-              </div>
-            ))}
-          </section>
-        )}
 
-        {/* TAB 3: ASISTENTE VIAL */}
-        {activeTab === 'assistant' && (
-          <section className="bg-slate-900/60 border border-slate-800 rounded-3xl overflow-hidden flex flex-col h-[520px] shadow-2xl">
-            <div className="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="relative">
-                  <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                    <Bot className="w-5 h-5" />
-                  </div>
-                  <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-900 absolute bottom-0 right-0" />
+                  <button
+                    onClick={() => setIsQrModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-md border border-white/25 text-white hover:bg-white/25 transition active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-[15px] text-amber-300">qr_code_scanner</span>
+                    <span className="text-[11px] font-semibold">QR de Abordaje</span>
+                  </button>
                 </div>
-                <div>
-                  <h3 className="text-xs font-bold text-white flex items-center gap-1">
-                    <span>Bot Vial Mbarete</span>
-                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 rounded">IA</span>
-                  </h3>
-                  <p className="text-[10px] text-emerald-400">En línea • Datos en tiempo real</p>
+
+                {/* Pie de Tarjeta */}
+                <div className="relative z-10 flex items-end justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 font-mono tracking-widest text-white text-[15px]">
+                      <span className="text-white/60">••••</span>
+                      <span className="text-white/60">••••</span>
+                      <span className="text-white/60">••••</span>
+                      <span className="font-extrabold text-amber-300">8421</span>
+                    </div>
+                    <p className="text-[9px] text-blue-200 mt-0.5 uppercase tracking-wider font-semibold">ESTUDIANTE / METROPOLITANO</p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span className="text-[10px] font-extrabold tracking-wider uppercase">
+                      {isCardFrozen ? 'CONGELADA' : 'ACTIVA'}
+                    </span>
+                  </div>
                 </div>
               </div>
+            </section>
+
+            {/* Saldo Disponible */}
+            <section className="flex flex-col items-center justify-center p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Saldo Disponible</span>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-[20px] font-bold text-[#F59E0B]">Gs.</span>
+                <h1 className="text-[36px] font-extrabold tracking-tight text-[#0B2046] leading-none">84.500</h1>
+              </div>
+              <div className="flex items-center gap-1.5 mt-2.5 px-3 py-1 rounded-full bg-sky-50 border border-sky-100 text-sky-800">
+                <span className="material-symbols-outlined text-[15px] text-[#1E3A8A]">directions_bus</span>
+                <span className="text-xs font-semibold">Equivale a aprox. 24 pasajes diferenciales</span>
+              </div>
+            </section>
+
+            {/* Botones de Acción Rápida */}
+            <section className="grid grid-cols-3 gap-2.5">
+              <button
+                onClick={() => showToast('Abriendo pasarela de recarga')}
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white shadow-md active:scale-95 transition min-h-[72px]"
+              >
+                <span className="material-symbols-outlined text-[22px] mb-1">add_card</span>
+                <span className="text-xs font-bold">Cargar Saldo</span>
+              </button>
 
               <button
-                onClick={() => setChatMessages([chatMessages[0]])}
-                className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
-                title="Reiniciar chat"
+                onClick={() => setIsQrModalOpen(true)}
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-white text-[#0B2046] border-2 border-[#0B2046]/85 hover:bg-blue-50/50 shadow-sm active:scale-95 transition min-h-[72px]"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="material-symbols-outlined text-[#1E3A8A] text-[22px] mb-1">qr_code_2</span>
+                <span className="text-xs font-bold">Pagar con QR</span>
               </button>
-            </div>
 
-            <div className="flex-1 p-3 overflow-y-auto space-y-3 bg-slate-950/70">
-              {chatMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed shadow-sm ${
-                      msg.sender === 'user'
-                        ? 'bg-emerald-600 text-white rounded-tr-none'
-                        : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
-                    }`}
-                  >
-                    <p>{msg.text}</p>
-                    <span className="block text-[9px] text-slate-400 text-right mt-1 opacity-70">
-                      {msg.timestamp}
-                    </span>
-                  </div>
-
-                  {msg.quickReplies && msg.quickReplies.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {msg.quickReplies.map((q) => (
-                        <button
-                          key={q}
-                          onClick={() => handleSendMessage(q)}
-                          className="text-[10px] font-medium bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-slate-800 hover:border-emerald-500/40 px-2.5 py-1 rounded-full transition"
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {isBotTyping && (
-                <div className="flex items-center gap-1.5 p-2 bg-slate-900 border border-slate-800 rounded-2xl w-20">
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" />
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce delay-150" />
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce delay-300" />
-                </div>
-              )}
-              <div ref={chatBottomRef} />
-            </div>
-
-            <div className="p-2.5 bg-slate-900 border-t border-slate-800 space-y-2">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSendMessage();
+              <button
+                onClick={() => {
+                  setIsCardFrozen(!isCardFrozen);
+                  showToast(isCardFrozen ? 'Tarjeta desbloqueada' : 'Tarjeta congelada preventivamente');
                 }}
-                className="flex items-center gap-1.5"
+                className={`flex flex-col items-center justify-center p-3 rounded-xl border shadow-sm active:scale-95 transition min-h-[72px] ${
+                  isCardFrozen ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
               >
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="Preguntale al bot sobre calles o micros..."
-                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
-                <button
-                  type="submit"
-                  disabled={!chatInput.trim()}
-                  className="p-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition disabled:opacity-40"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </form>
+                <span className="material-symbols-outlined text-[22px] mb-1">
+                  {isCardFrozen ? 'lock_open' : 'ac_unit'}
+                </span>
+                <span className="text-xs font-bold">{isCardFrozen ? 'Descongelar' : 'Congelar'}</span>
+              </button>
+            </section>
 
-              <a
-                href="https://wa.me/595981000000?text=Hola%20MbareteTráfico,%20quiero%20consultar%20el%20estado%20del%20tránsito"
-                target="_blank"
-                rel="noreferrer"
-                className="w-full py-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold flex items-center justify-center gap-1.5 transition"
-              >
-                <span>Continuar esta consulta en WhatsApp 💬</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-          </section>
-        )}
-
-        {/* FOOTER INFORMATIVO & BOTÓN INSTALAR PWA */}
-        <footer className="pt-4 border-t border-slate-900 text-center space-y-2 text-[10px] text-slate-500">
-          <button
-            onClick={() => setIsInstallModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:text-amber-400 transition"
-          >
-            <Download className="w-3 h-3 text-amber-400" />
-            <span>📲 Instalar App en Inicio</span>
-          </button>
-          <p className="text-slate-600">
-            © 2026 MbareteTráfico • Inteligencia Ciudadana para Asunción y Central
-          </p>
-        </footer>
-
-      </div>
-
-      {/* BARRA DE ACCIÓN INFERIOR FIJA */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 p-3">
-        <div className="max-w-md mx-auto">
-          <button
-            onClick={() => setIsReportModalOpen(true)}
-            className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 hover:opacity-95 active:scale-[0.98] transition"
-          >
-            <Mic className="w-4 h-4 text-slate-950 fill-slate-950" />
-            <span>🎙️ Reportar Tráfico o Colectivo</span>
-          </button>
-        </div>
-      </footer>
-
-      {/* MODAL INSTRUCCIONES DE INSTALACIÓN PWA */}
-      {isInstallModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
-                  <Smartphone className="w-4 h-4" />
+            {/* Auto-recarga Inteligente */}
+            <section className="flex items-center justify-between p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-sm">
+              <div className="flex items-start gap-2.5 pr-2">
+                <div className="p-2 rounded-lg bg-blue-50 border border-blue-100 text-[#1E3A8A] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[18px]">autorenew</span>
                 </div>
-                <h3 className="text-sm font-bold text-white">Instalar MbareteTráfico</h3>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-[#0B2046]">Auto-recarga Inteligente</span>
+                  <p className="text-[11px] text-slate-500">Recargar al bajar de Gs. 10.000</p>
+                </div>
               </div>
-              <button 
-                onClick={() => setIsInstallModalOpen(false)}
-                className="text-slate-400 hover:text-white"
+              <input
+                type="checkbox"
+                checked={autoRecharge}
+                onChange={(e) => setAutoRecharge(e.target.checked)}
+                className="w-5 h-5 accent-[#0B2046] rounded cursor-pointer"
+              />
+            </section>
+
+            {/* Canales Express */}
+            <section className="space-y-2">
+              <span className="text-xs font-bold text-[#0B2046] px-1 block">Canales de Recarga Rápida</span>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
+                  <span className="font-black text-xs text-[#0B2046]">Bancard</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold mt-0.5">Activo</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
+                  <span className="font-black text-xs text-[#0B2046]">Tigo Money</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold mt-0.5">Vinculado</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
+                  <span className="font-black text-xs text-[#0B2046]">SIPAP Direct</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold mt-0.5">Sin costo</span>
+                </div>
+              </div>
+            </section>
+
+            {/* Movimientos Recientes */}
+            <section className="space-y-2">
+              <span className="text-xs font-bold text-[#0B2046] px-1 block">Movimientos Recientes</span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-sky-100 flex items-center justify-center text-[#1E3A8A]">
+                      <span className="material-symbols-outlined text-[18px]">directions_bus</span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-[#0B2046] block">Línea 15-2 Acceso Sur</span>
+                      <span className="text-[10px] text-slate-400">Hoy · 07:45 · Validador #142</span>
+                    </div>
+                  </div>
+                  <span className="text-xs font-extrabold text-[#0B2046]">- Gs. 3.400</span>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                      <span className="material-symbols-outlined text-[18px]">payments</span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-[#0B2046] block">Recarga Online SIPAP</span>
+                      <span className="text-[10px] text-slate-400">Ayer · 14:10</span>
+                    </div>
+                  </div>
+                  <span className="text-xs font-extrabold text-emerald-600">+ Gs. 50.000</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+      </main>
+
+      {/* MODAL QR DINÁMICO */}
+      {isQrModalOpen && (
+        <div className="fixed inset-0 z-50 bg-[#0B2046]/50 backdrop-blur-sm flex items-end justify-center p-0 animate-in fade-in">
+          <div className="w-full max-w-md bg-white p-5 rounded-t-3xl shadow-2xl flex flex-col items-center border-t border-slate-100">
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mb-3" />
+            <div className="flex items-center justify-between w-full mb-3">
+              <div className="flex flex-col">
+                <span className="text-[17px] font-extrabold text-[#0B2046]">QR Dinámico de Pasaje</span>
+                <span className="text-xs text-slate-500">Acerque al lector del bus (Jaha / Más)</span>
+              </div>
+              <button
+                onClick={() => setIsQrModalOpen(false)}
+                className="p-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-[#0B2046]"
               >
-                <X className="w-4 h-4" />
+                <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-300">
-              <p>Instalá esta PWA directamente en la pantalla de tu celular sin pasar por la Play Store:</p>
-              
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                <div className="flex items-start gap-2">
-                  <span className="font-bold text-amber-400">1.</span>
-                  <span>En Chrome o Safari, tocá el menú de los tres puntos <strong>(⋮)</strong> o el botón <strong>Compartir</strong>.</span>
+            {/* Ilustración QR */}
+            <div className="p-4 bg-slate-50 border-2 border-[#1E3A8A]/20 rounded-2xl flex items-center justify-center shadow-inner my-2">
+              <div className="w-44 h-44 bg-white rounded-xl p-3 flex flex-col justify-between shadow-sm border border-slate-200">
+                <div className="flex justify-between w-full">
+                  <div className="w-10 h-10 bg-[#0B2046] rounded-md flex items-center justify-center">
+                    <div className="w-5 h-5 bg-white rounded-sm"></div>
+                  </div>
+                  <div className="flex-1 flex flex-wrap gap-1 px-2">
+                    <div className="w-2.5 h-2.5 bg-[#0B2046]"></div>
+                    <div className="w-2 h-2 bg-[#0B2046]"></div>
+                    <div className="w-3 h-2 bg-[#0B2046]"></div>
+                  </div>
+                  <div className="w-10 h-10 bg-[#0B2046] rounded-md flex items-center justify-center">
+                    <div className="w-5 h-5 bg-white rounded-sm"></div>
+                  </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <span className="font-bold text-amber-400">2.</span>
-                  <span>Seleccioná <strong>"Agregar a la pantalla principal"</strong> o <strong>"Instalar aplicación"</strong>.</span>
+                <div className="flex justify-between items-center w-full my-auto px-1">
+                  <div className="w-3 h-3 bg-[#0B2046]"></div>
+                  <div className="w-8 h-8 rounded-lg bg-[#0B2046] flex items-center justify-center shadow">
+                    <span className="material-symbols-outlined text-amber-400 text-[18px]">electric_bolt</span>
+                  </div>
+                  <div className="w-3 h-3 bg-[#0B2046]"></div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <span className="font-bold text-amber-400">3.</span>
-                  <span>¡Listo! Abrila como una aplicación nativa en cualquier momento.</span>
+                <div className="flex justify-between w-full">
+                  <div className="w-10 h-10 bg-[#0B2046] rounded-md flex items-center justify-center">
+                    <div className="w-5 h-5 bg-white rounded-sm"></div>
+                  </div>
+                  <div className="flex-1 flex flex-wrap gap-1 px-2 items-end">
+                    <div className="w-2 h-2.5 bg-[#0B2046]"></div>
+                    <div className="w-2.5 h-2 bg-[#0B2046]"></div>
+                  </div>
+                  <div className="w-10 h-10 flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-[#1E3A8A] rounded-full flex items-center justify-center">
+                      <div className="w-3 h-3 bg-[#1E3A8A] rounded-full animate-ping"></div>
+                    </div>
+                  </div>
                 </div>
               </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 mt-2 text-slate-500 text-xs">
+              <span className="material-symbols-outlined text-[#1E3A8A] text-[18px] animate-spin">sync</span>
+              <span>El código se actualiza en <strong className="text-[#1E3A8A]">{qrCountdown}s</strong></span>
             </div>
 
             <button
-              onClick={() => setIsInstallModalOpen(false)}
-              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition"
+              onClick={() => {
+                setIsQrModalOpen(false);
+                showToast('¡Pasaje validado con éxito!');
+              }}
+              className="w-full mt-4 py-3 rounded-xl bg-[#0B2046] text-white font-bold text-xs hover:bg-[#1E3A8A] transition shadow-md"
             >
-              Entendido
+              Listo para abordar
             </button>
           </div>
         </div>
       )}
 
-      {/* DRAWER MODAL DESLIZABLE (REPORTE CIUDADANO) */}
-      {isReportModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end justify-center animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-            <div className="pt-3 pb-2 px-4 border-b border-slate-800 flex flex-col items-center relative">
-              <div className="w-12 h-1.5 rounded-full bg-slate-700 mb-2" />
-              <div className="w-full flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-400">
-                    <ShieldAlert className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-white">Reporte Ciudadano Mbarete</h3>
-                    <p className="text-[10px] text-slate-400">Alertá a miles de conductores en segundos</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setIsReportModalOpen(false)}
-                  className="p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+      {/* BOTTOM NAVIGATION BAR OFICIAL */}
+      <nav className="fixed bottom-0 w-full z-40 pb-safe pointer-events-none">
+        <div className="max-w-md mx-auto px-4 pb-2">
+          <div className="pointer-events-auto h-16 rounded-2xl bg-white/95 backdrop-blur-2xl border border-slate-200/90 shadow-[0_10px_30px_-5px_rgba(11,32,70,0.12)] px-2 flex items-center justify-around">
+            <button
+              onClick={() => setActiveTab('rastreo')}
+              className={`flex flex-col items-center justify-center min-w-[64px] transition-colors ${
+                activeTab === 'rastreo' ? 'text-[#0B2046]' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <div className={`w-10 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                activeTab === 'rastreo' ? 'bg-[#0B2046]/10' : ''
+              }`}>
+                <span className="material-symbols-outlined text-[22px]">explore</span>
               </div>
-            </div>
+              <span className="text-[10px] font-bold tracking-tight">Rutas & Mapa</span>
+            </button>
 
-            <form onSubmit={handleSubmitReport} className="p-4 overflow-y-auto space-y-3.5 flex-1">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
-                  1. ¿Qué querés reportar?
-                </label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['Tráfico pesado', 'Accidente', 'Bache peligroso', 'Colectivo lleno', 'Colectivo demorado'] as const).map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setReportCategory(cat)}
-                      className={`py-2 px-2.5 rounded-xl text-xs font-semibold border text-left flex items-center justify-between transition ${
-                        reportCategory === cat
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-sm'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                      }`}
-                    >
-                      <span className="truncate">{cat}</span>
-                      {reportCategory === cat && <Zap className="w-3 h-3 text-amber-400 shrink-0 ml-1" />}
-                    </button>
-                  ))}
-                </div>
+            <button
+              onClick={() => setActiveTab('paradas')}
+              className={`flex flex-col items-center justify-center min-w-[64px] transition-colors ${
+                activeTab === 'paradas' ? 'text-[#0B2046]' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <div className={`w-10 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                activeTab === 'paradas' ? 'bg-[#0B2046]/10' : ''
+              }`}>
+                <span className="material-symbols-outlined text-[22px]">near_me</span>
               </div>
+              <span className="text-[10px] font-bold tracking-tight">Paradas</span>
+            </button>
 
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
-                  2. Zona o Eje Vial:
-                </label>
-                <select
-                  value={selectedZone}
-                  onChange={(e) => setSelectedZone(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-                >
-                  {COMMON_ZONES.map(z => (
-                    <option key={z} value={z}>{z}</option>
-                  ))}
-                </select>
+            <button
+              onClick={() => setActiveTab('billetera')}
+              className={`flex flex-col items-center justify-center min-w-[64px] transition-colors ${
+                activeTab === 'billetera' ? 'text-[#0B2046]' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <div className={`w-10 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                activeTab === 'billetera' ? 'bg-[#0B2046]/10' : ''
+              }`}>
+                <span className="material-symbols-outlined text-[22px]">contactless</span>
               </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    3. Describí lo que pasa:
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleToggleVoiceDictation}
-                    className={`text-[10px] font-bold flex items-center gap-1 px-2 py-0.5 rounded-full transition ${
-                      isSimulatingAudio
-                        ? 'bg-rose-500 text-white animate-pulse'
-                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20'
-                    }`}
-                  >
-                    <Mic className="w-3 h-3" />
-                    <span>{isSimulatingAudio ? 'Escuchando...' : 'Simular Audio / Voz'}</span>
-                  </button>
-                </div>
-
-                <textarea
-                  rows={3}
-                  required
-                  value={reportText}
-                  onChange={(e) => setReportText(e.target.value)}
-                  placeholder="Ej. Tránsito totalmente parado frente al viaducto por un bache, desviar por calles internas..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-                />
-
-                {audioTranscript && (
-                  <p className="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
-                    <Volume2 className="w-3 h-3" />
-                    <span>{audioTranscript}</span>
-                  </p>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 hover:opacity-95 transition"
-              >
-                Enviar Reporte a la Comunidad
-              </button>
-            </form>
+              <span className="text-[10px] font-bold tracking-tight">Billetera</span>
+            </button>
           </div>
         </div>
-      )}
-
-    </main>
+      </nav>
+    </div>
   );
 }
