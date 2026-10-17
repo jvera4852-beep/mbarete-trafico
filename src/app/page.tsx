@@ -16,11 +16,20 @@ export default function Home() {
   const [filterFast, setFilterFast] = useState(false);
   const [filterSeats, setFilterSeats] = useState(false);
 
-  // Estado de Billetera Virtual
-  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [qrCountdown, setQrCountdown] = useState(45);
-  const [isCardFrozen, setIsCardFrozen] = useState(false);
-  const [autoRecharge, setAutoRecharge] = useState(true);
+  // Estado de Billetera Real (Control Manual de Tarjeta Jaha / Más)
+  const [userCardType, setUserCardType] = useState<'JAHA' | 'MÁS'>('JAHA');
+  const [userCardNumber, setUserCardNumber] = useState('8421');
+  const [userBalance, setUserBalance] = useState(35000);
+  const [rechargeHistory, setRechargeHistory] = useState<
+    Array<{ id: string; monto: number; fecha: string; medio: string; saldoResultante: number }>
+  >([
+    { id: 'rec-1', monto: 20000, fecha: 'Hoy · 08:30', medio: 'Bancard / Pago Móvil', saldoResultante: 35000 },
+    { id: 'rec-2', monto: 15000, fecha: '14 Oct · 17:15', medio: 'Aquí Pago / Quiniela', saldoResultante: 15000 }
+  ]);
+  const [isAddRechargeOpen, setIsAddRechargeOpen] = useState(false);
+  const [manualRechargeAmount, setManualRechargeAmount] = useState('10000');
+  const [manualRechargeChannel, setManualRechargeChannel] = useState('Bancard / Pago Móvil');
+
 
   // Toast Feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -32,14 +41,6 @@ export default function Home() {
     }, 3500);
   };
 
-  // Timer QR
-  useEffect(() => {
-    if (!isQrModalOpen) return;
-    const interval = setInterval(() => {
-      setQrCountdown((prev) => (prev <= 1 ? 45 : prev - 1));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isQrModalOpen]);
 
   // Lista de colectivos en Paradas
   const busArrivals = [
@@ -585,276 +586,300 @@ export default function Home() {
         )}
 
         {/* =========================================
-            VISTA 3: MI BILLETERA (BILLETE ELECTRÓNICO)
+            VISTA 3: MI BILLETERA (REGISTRO MANUAL JAHA / MÁS)
            ========================================= */}
         {activeTab === 'billetera' && (
           <div className="flex flex-col w-full px-4 pt-4 pb-8 space-y-4 animate-in fade-in">
-            {/* Tarjeta Virtual Azul Zafiro Imperial */}
+            {/* Selector de Tarjeta: JAHA vs MÁS */}
+            <section className="bg-white rounded-2xl p-3 border border-slate-200/90 shadow-sm space-y-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+                Seleccioná tu Tarjeta de Pasaje:
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setUserCardType('JAHA');
+                    showToast('Tarjeta seleccionada: JAHA (Azul)');
+                  }}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition ${
+                    userCardType === 'JAHA'
+                      ? 'bg-[#1E3A8A] text-white border-[#1E3A8A] shadow-md shadow-blue-950/20'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+                  <span>Tarjeta JAHA</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setUserCardType('MÁS');
+                    showToast('Tarjeta seleccionada: MÁS Tarjeta (Verde/Naranja)');
+                  }}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition ${
+                    userCardType === 'MÁS'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-950/20'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                  <span>MÁS Tarjeta</span>
+                </button>
+              </div>
+            </section>
+
+            {/* Tarjeta Visual Personalizada */}
             <section className="relative w-full">
               <div
-                className={`relative w-full aspect-[1.586/1] rounded-2xl p-5 flex flex-col justify-between overflow-hidden shadow-[0_20px_40px_-15px_rgba(11,32,70,0.35)] bg-gradient-to-br from-[#1E3A8A] via-[#0E2554] to-[#0B2046] border border-white/20 transition-all ${
-                  isCardFrozen ? 'grayscale opacity-75' : ''
+                className={`relative w-full aspect-[1.586/1] rounded-2xl p-5 flex flex-col justify-between overflow-hidden shadow-xl border border-white/20 transition-all ${
+                  userCardType === 'JAHA'
+                    ? 'bg-gradient-to-br from-[#1E3A8A] via-[#0E2554] to-[#0B2046]'
+                    : 'bg-gradient-to-br from-emerald-700 via-teal-800 to-slate-900'
                 }`}
               >
                 <div className="absolute inset-0 bg-gradient-to-tr from-white/10 via-transparent to-amber-300/15 pointer-events-none mix-blend-overlay"></div>
-                <div className="absolute -top-24 -right-24 w-60 h-60 bg-blue-400/20 blur-3xl pointer-events-none rounded-full"></div>
 
                 {/* Cabecera Tarjeta */}
                 <div className="relative z-10 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <div className="w-8 h-8 rounded-lg bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/25">
-                      <span className="material-symbols-outlined text-amber-400 text-[20px]">electric_bolt</span>
+                      <span className="material-symbols-outlined text-amber-300 text-[20px]">credit_card</span>
                     </div>
                     <div className="flex flex-col ml-1">
-                      <span className="text-[16px] font-extrabold tracking-tight text-white leading-tight">MbareteCard</span>
-                      <span className="text-[9px] font-semibold tracking-wider uppercase text-blue-200">Billetaje Electrónico</span>
+                      <span className="text-[17px] font-extrabold tracking-tight text-white leading-tight">
+                        {userCardType === 'JAHA' ? 'JAHA Electrónico' : 'MÁS Tarjeta'}
+                      </span>
+                      <span className="text-[9px] font-semibold tracking-wider uppercase text-slate-200">
+                        Billetaje Electrónico Paraguay
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-white/90 text-[20px] rotate-90">contactless</span>
-                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/15 backdrop-blur-md text-white font-bold border border-white/25">
-                      JAHA / MÁS
-                    </span>
-                  </div>
+                  <span className="material-symbols-outlined text-white/90 text-[20px] rotate-90">contactless</span>
                 </div>
 
-                {/* Chip Dorado */}
+                {/* Número de Tarjeta y Chip */}
                 <div className="relative z-10 flex items-center justify-between my-auto">
-                  <div className="w-11 h-8 rounded-lg bg-gradient-to-tr from-amber-600 via-amber-300 to-amber-100 shadow-md p-1 flex flex-col justify-between border border-amber-300/60">
+                  <div className="w-10 h-7 rounded-lg bg-gradient-to-tr from-amber-600 via-amber-300 to-amber-100 shadow-md p-1 flex flex-col justify-between border border-amber-300/60">
                     <div className="w-full h-0.5 bg-amber-900/30"></div>
-                    <div className="flex justify-between w-full h-1.5">
-                      <div className="w-2 rounded-sm bg-amber-900/25"></div>
-                      <div className="w-2 rounded-sm bg-amber-900/25"></div>
+                    <div className="flex justify-between w-full h-1">
+                      <div className="w-1.5 rounded-sm bg-amber-900/25"></div>
+                      <div className="w-1.5 rounded-sm bg-amber-900/25"></div>
                     </div>
                     <div className="w-full h-0.5 bg-amber-900/30"></div>
                   </div>
 
-                  <button
-                    onClick={() => setIsQrModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-md border border-white/25 text-white hover:bg-white/25 transition active:scale-95"
-                  >
-                    <span className="material-symbols-outlined text-[15px] text-amber-300">qr_code_scanner</span>
-                    <span className="text-[11px] font-semibold">QR de Abordaje</span>
-                  </button>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-300 uppercase block font-semibold">N° Tarjeta</span>
+                    <input
+                      type="text"
+                      maxLength={8}
+                      value={userCardNumber}
+                      onChange={(e) => setUserCardNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="8421"
+                      className="bg-black/30 border border-white/20 rounded-lg px-2 py-0.5 text-right font-mono text-xs text-amber-300 font-bold focus:outline-none w-24"
+                      title="Editar últimos 4 u 8 dígitos"
+                    />
+                  </div>
                 </div>
 
                 {/* Pie de Tarjeta */}
                 <div className="relative z-10 flex items-end justify-between">
                   <div>
-                    <div className="flex items-center gap-2 font-mono tracking-widest text-white text-[15px]">
-                      <span className="text-white/60">••••</span>
-                      <span className="text-white/60">••••</span>
-                      <span className="text-white/60">••••</span>
-                      <span className="font-extrabold text-amber-300">8421</span>
-                    </div>
-                    <p className="text-[9px] text-blue-200 mt-0.5 uppercase tracking-wider font-semibold">ESTUDIANTE / METROPOLITANO</p>
+                    <span className="text-[10px] text-slate-300 uppercase block">Saldo Estimado</span>
+                    <span className="text-xl font-black text-white tracking-tight">
+                      Gs. {userBalance.toLocaleString('es-PY')}
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span className="text-[10px] font-extrabold tracking-wider uppercase">
-                      {isCardFrozen ? 'CONGELADA' : 'ACTIVA'}
-                    </span>
+                    <span className="text-[10px] font-extrabold tracking-wider uppercase">VINCULADA</span>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Saldo Disponible */}
+            {/* Saldo y Pasajes Restantes */}
             <section className="flex flex-col items-center justify-center p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm">
-              <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Saldo Disponible</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">
+                Saldo de tu Tarjeta {userCardType}
+              </span>
               <div className="flex items-baseline gap-1.5 mt-1">
                 <span className="text-[20px] font-bold text-[#F59E0B]">Gs.</span>
-                <h1 className="text-[36px] font-extrabold tracking-tight text-[#0B2046] leading-none">84.500</h1>
+                <h1 className="text-[34px] font-extrabold tracking-tight text-[#0B2046] leading-none">
+                  {userBalance.toLocaleString('es-PY')}
+                </h1>
               </div>
+
               <div className="flex items-center gap-1.5 mt-2.5 px-3 py-1 rounded-full bg-sky-50 border border-sky-100 text-sky-800">
                 <span className="material-symbols-outlined text-[15px] text-[#1E3A8A]">directions_bus</span>
-                <span className="text-xs font-semibold">Equivale a aprox. 24 pasajes diferenciales</span>
+                <span className="text-xs font-semibold">
+                  Te alcanza para aprox. {Math.floor(userBalance / 3400)} pasajes Diferenciales (Gs. 3.400)
+                </span>
               </div>
             </section>
 
-            {/* Botones de Acción Rápida */}
-            <section className="grid grid-cols-3 gap-2.5">
+            {/* Botón Principal: Anotar Última Recarga */}
+            <section className="grid grid-cols-2 gap-2.5">
               <button
-                onClick={() => showToast('Abriendo pasarela de recarga')}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white shadow-md active:scale-95 transition min-h-[72px]"
+                onClick={() => setIsAddRechargeOpen(true)}
+                className="py-3 px-3 rounded-xl bg-[#0B2046] hover:bg-[#1E3A8A] text-white font-bold text-xs shadow-md flex items-center justify-center gap-2 transition active:scale-95"
               >
-                <span className="material-symbols-outlined text-[22px] mb-1">add_card</span>
-                <span className="text-xs font-bold">Cargar Saldo</span>
-              </button>
-
-              <button
-                onClick={() => setIsQrModalOpen(true)}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-white text-[#0B2046] border-2 border-[#0B2046]/85 hover:bg-blue-50/50 shadow-sm active:scale-95 transition min-h-[72px]"
-              >
-                <span className="material-symbols-outlined text-[#1E3A8A] text-[22px] mb-1">qr_code_2</span>
-                <span className="text-xs font-bold">Pagar con QR</span>
+                <span className="material-symbols-outlined text-[18px] text-amber-400">add_circle</span>
+                <span>Anotar Nueva Recarga</span>
               </button>
 
               <button
                 onClick={() => {
-                  setIsCardFrozen(!isCardFrozen);
-                  showToast(isCardFrozen ? 'Tarjeta desbloqueada' : 'Tarjeta congelada preventivamente');
+                  if (userBalance >= 3400) {
+                    const newBal = userBalance - 3400;
+                    setUserBalance(newBal);
+                    showToast('Se descontó 1 pasaje diferencial (Gs. 3.400)');
+                  } else {
+                    showToast('Saldo insuficiente para un pasaje diferencial');
+                  }
                 }}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border shadow-sm active:scale-95 transition min-h-[72px] ${
-                  isCardFrozen ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
+                className="py-3 px-3 rounded-xl bg-white border border-slate-300 text-[#0B2046] hover:bg-slate-50 font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition active:scale-95"
               >
-                <span className="material-symbols-outlined text-[22px] mb-1">
-                  {isCardFrozen ? 'lock_open' : 'ac_unit'}
-                </span>
-                <span className="text-xs font-bold">{isCardFrozen ? 'Descongelar' : 'Congelar'}</span>
+                <span className="material-symbols-outlined text-[18px] text-rose-500">remove_circle_outline</span>
+                <span>Marcar 1 Pasaje Usado</span>
               </button>
             </section>
 
-            {/* Auto-recarga Inteligente */}
-            <section className="flex items-center justify-between p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-sm">
-              <div className="flex items-start gap-2.5 pr-2">
-                <div className="p-2 rounded-lg bg-blue-50 border border-blue-100 text-[#1E3A8A] flex items-center justify-center">
-                  <span className="material-symbols-outlined text-[18px]">autorenew</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-[#0B2046]">Auto-recarga Inteligente</span>
-                  <p className="text-[11px] text-slate-500">Recargar al bajar de Gs. 10.000</p>
-                </div>
+            {/* Historial Real de Recargas Anotadas */}
+            <section className="space-y-2.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-bold text-[#0B2046]">Historial de Recargas Cargadas</span>
+                <span className="text-[10px] text-slate-500">{rechargeHistory.length} registros</span>
               </div>
-              <input
-                type="checkbox"
-                checked={autoRecharge}
-                onChange={(e) => setAutoRecharge(e.target.checked)}
-                className="w-5 h-5 accent-[#0B2046] rounded cursor-pointer"
-              />
-            </section>
 
-            {/* Canales Express */}
-            <section className="space-y-2">
-              <span className="text-xs font-bold text-[#0B2046] px-1 block">Canales de Recarga Rápida</span>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
-                  <span className="font-black text-xs text-[#0B2046]">Bancard</span>
-                  <span className="text-[10px] text-emerald-600 font-semibold mt-0.5">Activo</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
-                  <span className="font-black text-xs text-[#0B2046]">Tigo Money</span>
-                  <span className="text-[10px] text-emerald-600 font-semibold mt-0.5">Vinculado</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
-                  <span className="font-black text-xs text-[#0B2046]">SIPAP Direct</span>
-                  <span className="text-[10px] text-emerald-600 font-semibold mt-0.5">Sin costo</span>
-                </div>
-              </div>
-            </section>
-
-            {/* Movimientos Recientes */}
-            <section className="space-y-2">
-              <span className="text-xs font-bold text-[#0B2046] px-1 block">Movimientos Recientes</span>
               <div className="space-y-2">
-                <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-sky-100 flex items-center justify-center text-[#1E3A8A]">
-                      <span className="material-symbols-outlined text-[18px]">directions_bus</span>
+                {rechargeHistory.map((rec) => (
+                  <div
+                    key={rec.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+                        <span className="material-symbols-outlined text-[18px]">payments</span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-[#0B2046] block">
+                          Recarga {userCardType} • {rec.medio}
+                        </span>
+                        <span className="text-[10px] text-slate-400">{rec.fecha}</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-xs font-bold text-[#0B2046] block">Línea 15-2 Acceso Sur</span>
-                      <span className="text-[10px] text-slate-400">Hoy · 07:45 · Validador #142</span>
-                    </div>
-                  </div>
-                  <span className="text-xs font-extrabold text-[#0B2046]">- Gs. 3.400</span>
-                </div>
 
-                <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                      <span className="material-symbols-outlined text-[18px]">payments</span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-[#0B2046] block">Recarga Online SIPAP</span>
-                      <span className="text-[10px] text-slate-400">Ayer · 14:10</span>
+                    <div className="text-right">
+                      <span className="text-xs font-black text-emerald-600 block">
+                        + Gs. {rec.monto.toLocaleString('es-PY')}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Saldo: Gs. {rec.saldoResultante.toLocaleString('es-PY')}
+                      </span>
                     </div>
                   </div>
-                  <span className="text-xs font-extrabold text-emerald-600">+ Gs. 50.000</span>
-                </div>
+                ))}
               </div>
             </section>
           </div>
         )}
-      </main>
 
-      {/* MODAL QR DINÁMICO */}
-      {isQrModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#0B2046]/50 backdrop-blur-sm flex items-end justify-center p-0 animate-in fade-in">
-          <div className="w-full max-w-md bg-white p-5 rounded-t-3xl shadow-2xl flex flex-col items-center border-t border-slate-100">
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mb-3" />
-            <div className="flex items-center justify-between w-full mb-3">
-              <div className="flex flex-col">
-                <span className="text-[17px] font-extrabold text-[#0B2046]">QR Dinámico de Pasaje</span>
-                <span className="text-xs text-slate-500">Acerque al lector del bus (Jaha / Más)</span>
+        {/* MODAL PARA ANOTAR RECARGA MANUAL */}
+        {isAddRechargeOpen && (
+          <div className="fixed inset-0 z-50 bg-[#0B2046]/50 backdrop-blur-sm flex items-end justify-center p-0 animate-in fade-in">
+            <div className="w-full max-w-md bg-white p-5 rounded-t-3xl shadow-2xl flex flex-col border-t border-slate-100 space-y-3.5">
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-1" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-extrabold text-[#0B2046]">Anotar Recarga de Pasaje</h3>
+                  <p className="text-[11px] text-slate-500">Para llevar el historial de tu saldo en {userCardType}</p>
+                </div>
+                <button
+                  onClick={() => setIsAddRechargeOpen(false)}
+                  className="p-1 rounded-full bg-slate-100 text-slate-500"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
               </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                  Monto que cargaste en Guaraníes:
+                </label>
+                <div className="grid grid-cols-4 gap-1.5 mb-2">
+                  {['10000', '20000', '35000', '50000'].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setManualRechargeAmount(amt)}
+                      className={`py-1.5 rounded-lg text-xs font-bold border transition ${
+                        manualRechargeAmount === amt
+                          ? 'bg-[#0B2046] text-white border-[#0B2046]'
+                          : 'bg-slate-50 border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {parseInt(amt, 10).toLocaleString('es-PY')}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  value={manualRechargeAmount}
+                  onChange={(e) => setManualRechargeAmount(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-[#0B2046] focus:outline-none focus:border-[#0B2046]"
+                  placeholder="Ej. 20000"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                  ¿Dónde o por qué medio cargaste?
+                </label>
+                <select
+                  value={manualRechargeChannel}
+                  onChange={(e) => setManualRechargeChannel(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-[#0B2046] font-medium focus:outline-none focus:border-[#0B2046]"
+                >
+                  <option value="Bancard / Pago Móvil">Bancard / Pago Móvil</option>
+                  <option value="Aquí Pago / Quiniela">Aquí Pago / Quiniela</option>
+                  <option value="Tigo Money">Tigo Money</option>
+                  <option value="Billetera Personal">Billetera Personal</option>
+                  <option value="Boca de Cobranzas / Parada">Boca de Cobranzas en Parada</option>
+                </select>
+              </div>
+
               <button
-                onClick={() => setIsQrModalOpen(false)}
-                className="p-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-[#0B2046]"
+                onClick={() => {
+                  const montoNum = parseInt(manualRechargeAmount, 10);
+                  if (isNaN(montoNum) || montoNum <= 0) {
+                    showToast('Ingresá un monto válido');
+                    return;
+                  }
+                  const newBalance = userBalance + montoNum;
+                  setUserBalance(newBalance);
+
+                  const newEntry = {
+                    id: `rec-${Date.now()}`,
+                    monto: montoNum,
+                    fecha: 'Recién cargado',
+                    medio: manualRechargeChannel,
+                    saldoResultante: newBalance
+                  };
+                  setRechargeHistory([newEntry, ...rechargeHistory]);
+                  setIsAddRechargeOpen(false);
+                  showToast(`¡Recarga de Gs. ${montoNum.toLocaleString('es-PY')} guardada en el historial! 🎉`);
+                }}
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md"
               >
-                <span className="material-symbols-outlined text-[20px]">close</span>
+                Guardar Recarga
               </button>
             </div>
-
-            {/* Ilustración QR */}
-            <div className="p-4 bg-slate-50 border-2 border-[#1E3A8A]/20 rounded-2xl flex items-center justify-center shadow-inner my-2">
-              <div className="w-44 h-44 bg-white rounded-xl p-3 flex flex-col justify-between shadow-sm border border-slate-200">
-                <div className="flex justify-between w-full">
-                  <div className="w-10 h-10 bg-[#0B2046] rounded-md flex items-center justify-center">
-                    <div className="w-5 h-5 bg-white rounded-sm"></div>
-                  </div>
-                  <div className="flex-1 flex flex-wrap gap-1 px-2">
-                    <div className="w-2.5 h-2.5 bg-[#0B2046]"></div>
-                    <div className="w-2 h-2 bg-[#0B2046]"></div>
-                    <div className="w-3 h-2 bg-[#0B2046]"></div>
-                  </div>
-                  <div className="w-10 h-10 bg-[#0B2046] rounded-md flex items-center justify-center">
-                    <div className="w-5 h-5 bg-white rounded-sm"></div>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center w-full my-auto px-1">
-                  <div className="w-3 h-3 bg-[#0B2046]"></div>
-                  <div className="w-8 h-8 rounded-lg bg-[#0B2046] flex items-center justify-center shadow">
-                    <span className="material-symbols-outlined text-amber-400 text-[18px]">electric_bolt</span>
-                  </div>
-                  <div className="w-3 h-3 bg-[#0B2046]"></div>
-                </div>
-                <div className="flex justify-between w-full">
-                  <div className="w-10 h-10 bg-[#0B2046] rounded-md flex items-center justify-center">
-                    <div className="w-5 h-5 bg-white rounded-sm"></div>
-                  </div>
-                  <div className="flex-1 flex flex-wrap gap-1 px-2 items-end">
-                    <div className="w-2 h-2.5 bg-[#0B2046]"></div>
-                    <div className="w-2.5 h-2 bg-[#0B2046]"></div>
-                  </div>
-                  <div className="w-10 h-10 flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-[#1E3A8A] rounded-full flex items-center justify-center">
-                      <div className="w-3 h-3 bg-[#1E3A8A] rounded-full animate-ping"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 mt-2 text-slate-500 text-xs">
-              <span className="material-symbols-outlined text-[#1E3A8A] text-[18px] animate-spin">sync</span>
-              <span>El código se actualiza en <strong className="text-[#1E3A8A]">{qrCountdown}s</strong></span>
-            </div>
-
-            <button
-              onClick={() => {
-                setIsQrModalOpen(false);
-                showToast('¡Pasaje validado con éxito!');
-              }}
-              className="w-full mt-4 py-3 rounded-xl bg-[#0B2046] text-white font-bold text-xs hover:bg-[#1E3A8A] transition shadow-md"
-            >
-              Listo para abordar
-            </button>
           </div>
-        </div>
-      )}
+        )}
+      </main>
+
 
       {/* BOTTOM NAVIGATION BAR OFICIAL */}
       <nav className="fixed bottom-0 w-full z-40 pb-safe pointer-events-none">
