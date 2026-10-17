@@ -271,22 +271,6 @@ export default function Home() {
                     <span className="text-xs text-sky-700 font-bold mt-1">21°C AC</span>
                   </div>
                 </div>
-
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[#0B2046] font-semibold flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[17px] text-emerald-600">airline_seat_recline_normal</span>
-                      Ocupación 65%
-                    </span>
-                    <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70">
-                      14 Asientos Libres
-                    </span>
-                  </div>
-                  <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden flex">
-                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: '65%' }}></div>
-                  </div>
-                  <p className="text-[11px] text-slate-500">Flujo de subida moderado en el tramo actual</p>
-                </div>
               </section>
 
               {/* Card 2: Secuencia de Paradas */}
